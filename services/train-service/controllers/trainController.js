@@ -1,14 +1,6 @@
+// trainController.js
 const Train = require("../models/train");
 const redisClient = require("../config/redis");
-const { Op } = require("sequelize");
-const createBreaker = require("../config/circuitBreaker");
-
-// Create circuit breakers for database operations
-const findAllBreaker = createBreaker(Train.findAll.bind(Train));
-const findByPkBreaker = createBreaker(Train.findByPk.bind(Train));
-const createTrainBreaker = createBreaker(Train.create.bind(Train));
-const updateBreaker = createBreaker(Train.update.bind(Train));
-const destroyBreaker = createBreaker(Train.destroy.bind(Train));
 
 exports.getTrainSchedule = async (req, res) => {
   const { source, destination } = req.query;
@@ -20,24 +12,23 @@ exports.getTrainSchedule = async (req, res) => {
       return res.json(JSON.parse(cachedSchedule));
     }
 
-    const schedule = await findAllBreaker.fire({
+    const schedule = await Train.findAll({
       where: {
         source,
         destination,
       },
     });
 
-    if (schedule.length === 0) {
+    if (!schedule || schedule.length === 0) {
       return res
         .status(404)
         .json({ message: "No trains available for the selected route" });
     }
 
     await redisClient.set(cacheKey, JSON.stringify(schedule), "EX", 3600);
-    res.json(schedule);
+    return res.json(schedule);
   } catch (error) {
-    console.log(error);
-    res
+    return res
       .status(500)
       .json({ message: "Error fetching train schedule", error: error.message });
   }
@@ -46,13 +37,13 @@ exports.getTrainSchedule = async (req, res) => {
 exports.getTrainDetails = async (req, res) => {
   try {
     const { trainId } = req.params;
-    const train = await findByPkBreaker.fire(trainId);
+    const train = await Train.findByPk(trainId);
     if (!train) {
       return res.status(404).json({ message: "Train not found" });
     }
-    res.json(train);
+    return res.json(train);
   } catch (error) {
-    res
+    return res
       .status(500)
       .json({ message: "Error fetching train details", error: error.message });
   }
@@ -60,12 +51,12 @@ exports.getTrainDetails = async (req, res) => {
 
 exports.createTrain = async (req, res) => {
   try {
-    const newTrain = await createTrainBreaker.fire(req.body);
-    res
+    const newTrain = await Train.create(req.body);
+    return res
       .status(201)
       .json({ trainId: newTrain.id, message: "Train created successfully" });
   } catch (error) {
-    res
+    return res
       .status(400)
       .json({ message: "Error creating train", error: error.message });
   }
@@ -74,15 +65,15 @@ exports.createTrain = async (req, res) => {
 exports.updateTrain = async (req, res) => {
   try {
     const { trainId } = req.params;
-    const [updated] = await updateBreaker.fire(req.body, {
+    const [updated] = await Train.update(req.body, {
       where: { id: trainId },
     });
-    if (updated === 0) {
+    if (!updated) {
       return res.status(404).json({ message: "Train not found" });
     }
-    res.json({ message: "Train details updated successfully" });
+    return res.json({ message: "Train details updated successfully" });
   } catch (error) {
-    res
+    return res
       .status(400)
       .json({ message: "Error updating train", error: error.message });
   }
@@ -91,15 +82,15 @@ exports.updateTrain = async (req, res) => {
 exports.deleteTrain = async (req, res) => {
   try {
     const { trainId } = req.params;
-    const deleted = await destroyBreaker.fire({
+    const deleted = await Train.destroy({
       where: { id: trainId },
     });
-    if (deleted === 0) {
+    if (!deleted) {
       return res.status(404).json({ message: "Train not found" });
     }
-    res.json({ message: "Train deleted successfully" });
+    return res.json({ message: "Train deleted successfully" });
   } catch (error) {
-    res
+    return res
       .status(500)
       .json({ message: "Error deleting train", error: error.message });
   }
