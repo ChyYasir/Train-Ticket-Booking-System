@@ -1,0 +1,31 @@
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
+
+const Train = sequelize.define("Train", {
+  trainName: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  route: {
+    type: DataTypes.JSONB,
+    allowNull: false,
+  },
+  coaches: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+  },
+  fare: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+  },
+  source: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  destination: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+});
+
+module.exports = Train;
