@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 services:
   # RabbitMQ service
   rabbitmq:
@@ -86,7 +86,7 @@ services:
       - rabbitmq
       - postgres
 
-  # Notification Service
+  # Train Service
   train-service:
     build: ./services/train-service
     environment:
@@ -98,7 +98,7 @@ services:
       - rabbitmq
       - postgres
 
-  # Payment Service (Spring Boot + Kotlin)
+  Payment Service (Spring Boot + Kotlin)
   payment-service:
     build: ./services/payment-service
     environment:
@@ -108,8 +108,7 @@ services:
     depends_on:
       - rabbitmq
 
-
-  # Customer Frontend
+  Customer Frontend
   frontend:
     build: ./frontend
     ports:
@@ -118,9 +117,48 @@ services:
       - user-service
       - booking-service
       - train-service
-      - payment-service
+      # - payment-service
       - notification-service
+  # ELK Stack
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
 
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.15.3
+    ports:
+      - "5044:5044"
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+    depends_on:
+      - elasticsearch
+
+  # kibana:
+  #   image: docker.elastic.co/kibana/kibana:8.15.3
+  #   volumes:
+  #     - ./kibana.yml:/usr/share/kibana/config/kibana.yml # Bind mount the kibana.yml file
+  #     - ./logs:/usr/share/kibana/logs
+  #   ports:
+  #     - "5601:5601" # Expose Kibana on port 5601
+  #   depends_on:
+  #     - elasticsearch
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    restart: always
+    environment:
+      - ELASTICSEARCH_HOSTS=["http://elasticsearch:9200"]
+    ports:
+      - 5601:5601
+    volumes:
+      - ./kibana.yml/:/usr/share/kibana/config/kibana.yml:ro
+    depends_on:
+      - elasticsearch
   nginx:
     build: ./gateway
     ports:
@@ -132,7 +170,34 @@ services:
       - train-service
       - payment-service
 
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.15.3
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml
+      - ./services/user-service/logs:/app/services/user-service/logs
+    depends_on:
+      - logstash
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   postgres-data:
   user-db-data:
   redis-data:
+  esdata:
+    driver: local
+  grafana-data:

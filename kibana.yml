@@ -1,0 +1,37 @@
+# The name of the Kibana instance. This is used for display purposes.
+server.name: kibana
+# The URL Kibana uses to connect to the Kibana server. This setting is useful when Kibana is served behind a proxy.
+server.host: "0.0.0.0"
+# Port to bind the Kibana server to.
+server.port: 5601
+
+monitoring.ui.container.elasticsearch.enabled: true
+# Fleet and Elastic Agent configuration
+xpack.fleet.enabled: true # Enable Fleet in Kibana
+xpack.fleet.agents.enabled: true # Enable management of agents
+xpack.fleet.agents.elasticsearch.hosts: ["http://elasticsearch:9200"]
+xpack.fleet.agents.fleet_server.hosts: ["http://fleet_server:9243"]
+xpack.reporting.roles.enabled: false
+
+xpack.encryptedSavedObjects.encryptionKey: "this-is-not-a-real-key-but-gets-the-job-done"
+
+# Fleet package configuration
+xpack.fleet.packages:
+  - name: "apm" # APM integration
+    version: "latest" # Use the latest version of the APM package
+
+# Fleet agent policy configuration
+xpack.fleet.agentPolicies:
+  - name: Agent policy 1 # Name of the agent policy
+    id: agent-policy-1 # Unique identifier for the policy
+    namespace: default # Namespace for data
+    monitoring_enabled:
+      - logs
+      - metrics
+    package_policies:
+      - name: apm-1
+        id: default-apm
+        package:
+          name: apm
+## Misc
+elasticsearch.requestTimeout: 90000
