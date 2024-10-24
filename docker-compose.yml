@@ -99,14 +99,14 @@ services:
       - postgres
 
   # Payment Service (Spring Boot + Kotlin)
-  payment-service:
-    build: ./services/payment-service
-    environment:
-      RABBITMQ_URL: amqp://rabbitmq:5672
-    ports:
-      - "8080:8080"
-    depends_on:
-      - rabbitmq
+  # payment-service:
+  #   build: ./services/payment-service
+  #   environment:
+  #     RABBITMQ_URL: amqp://rabbitmq:5672
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     - rabbitmq
 
 
   # Customer Frontend
@@ -118,7 +118,7 @@ services:
       - user-service
       - booking-service
       - train-service
-      - payment-service
+      # - payment-service
       - notification-service
 
   nginx:
@@ -130,7 +130,7 @@ services:
       - booking-service
       - notification-service
       - train-service
-      - payment-service
+      # - payment-service
 
 volumes:
   postgres-data:

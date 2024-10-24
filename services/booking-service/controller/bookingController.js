@@ -3,7 +3,35 @@ const redisClient = require('../config/redisClient');
 const { Sequelize } = require("sequelize"); 
 const { trace } = require("@opentelemetry/api");
 const tracer = trace.getTracer("booking-service"); // Initialize the tracer
+const amqp = require('amqplib/callback_api');
+const dotenv = require("dotenv");
+dotenv.config();
 
+const produceBookingMessage = (userId, bookingId) => {
+  console.log("Checking booking id", bookingId)
+  console.log("Checking process.env.RABBITMQ_URL", process.env.RABBITMQ_URL)
+  
+  amqp.connect(process.env.RABBITMQ_URL, (error0, connection) => {
+    console.log("Checking again")
+    if (error0) {
+      throw error0;
+    }
+
+    connection.createChannel((error1, channel) => {
+      if (error1) {
+        throw error1;
+      }
+
+      const queue = "booking_notification_queue";
+      const message = JSON.stringify({ userId, bookingId });
+
+      channel.assertQueue(queue, { durable: false });
+      channel.sendToQueue(queue, Buffer.from(message));
+
+      console.log(`Message sent to queue: ${queue}`);
+    });
+  });
+};
 // Function to create a new booking with tracing
 const createBooking = async (req, res) => {
   const span = tracer.startSpan("createBooking", {
@@ -46,6 +74,7 @@ const createBooking = async (req, res) => {
     });
 
     // Step 2: Create a new booking in PostgreSQL if seats are available
+    // Create a new booking with status "Pending"
     const booking = await Booking.create({
       userId,
       trainId,
@@ -53,9 +82,13 @@ const createBooking = async (req, res) => {
       coach,
       seats,
       passengerDetails,
+      status: "Pending",
     });
 
     dbSpan.end(); // End the child span for DB operation
+    console.log("Checking msg queue")
+    
+    produceBookingMessage(userId, booking.id);
 
     // Step 3: Calculate TTL for Redis based on journeyDate
     const currentTime = new Date();
@@ -231,8 +264,47 @@ const getAllBookings = async (req, res) => {
   }
 };
 
+const getBookingById = async (req, res) => {
+  const span = tracer.startSpan("getBookingById", {
+    attributes: { "function.name": "getBookingById" },
+  });
+
+  const { bookingId } = req.params; // Get the bookingId from the request parameters
+
+  try {
+    // Start a child span for database operation
+    const dbSpan = tracer.startSpan("fetchBookingFromDatabase", {
+      parent: span,
+      attributes: { "db.operation": "findByPk", "db.collection": "bookings" },
+    });
+
+    // Fetch the booking from the database using the booking ID
+    const booking = await Booking.findByPk(bookingId);
+
+    dbSpan.end(); // End the child span
+
+    if (!booking) {
+      span.setAttribute("getBookingById.status", "not_found");
+      span.end();
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    span.setAttribute("getBookingById.status", "success");
+    res.json(booking); // Return the booking details
+  } catch (error) {
+    span.setAttribute("getBookingById.status", "error");
+    span.setAttribute("error.message", error.message);
+    console.error('Error fetching booking by ID:', error);
+    res.status(500).json({ message: 'An error occurred while fetching the booking' });
+  } finally {
+    span.end(); // End the span
+  }
+};
+
+
 module.exports = {
   createBooking,
   getAvailableSeats,
   getAllBookings,
+  getBookingById 
 };

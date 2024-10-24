@@ -32,6 +32,11 @@ const Booking = sequelize.define("Booking", {
     type: DataTypes.JSONB, // JSONB field to store an array of passenger details
     allowNull: false,
   },
+  status: {
+    type: DataTypes.ENUM("Pending", "Confirmed", "Cancelled"), // Enum for booking status
+    defaultValue: "Pending", // Default status is "Pending"
+    allowNull: false,
+  },
 });
 
 // Sync the model with the database (optional)
