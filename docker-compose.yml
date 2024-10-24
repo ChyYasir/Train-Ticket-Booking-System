@@ -1,0 +1,138 @@
+version: '3.8'
+services:
+  # RabbitMQ service
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  redis:
+    image: redis:7.4
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Postgres
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ticketsystem
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for User Service
+  user-db:
+    image: mongo:8
+    volumes:
+      - user-db-data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Auth Service
+  user-service:
+    build: ./services/user-service
+    environment:
+      DATABASE_URL: mongodb://order-db:27017/user-db
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "3330:3330"
+    depends_on:
+      - rabbitmq
+      - user-db
+
+  # booking Service
+  booking-service:
+    build: ./services/booking-service
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ticketsystem
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "3331:3331"
+    depends_on:
+      - rabbitmq
+      - postgres
+
+  # Notification Service
+  notification-service:
+    build: ./services/notification-service
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ticketsystem
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "3332:3332"
+    depends_on:
+      - rabbitmq
+      - postgres
+
+  # Notification Service
+  train-service:
+    build: ./services/train-service
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ticketsystem
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "3333:3333"
+    depends_on:
+      - rabbitmq
+      - postgres
+
+  # Payment Service (Spring Boot + Kotlin)
+  payment-service:
+    build: ./services/payment-service
+    environment:
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "8080:8080"
+    depends_on:
+      - rabbitmq
+
+
+  # Customer Frontend
+  frontend:
+    build: ./frontend
+    ports:
+      - "8081:80"
+    depends_on:
+      - user-service
+      - booking-service
+      - train-service
+      - payment-service
+      - notification-service
+
+  nginx:
+    build: ./gateway
+    ports:
+      - "9000:80"
+    depends_on:
+      - user-service
+      - booking-service
+      - notification-service
+      - train-service
+      - payment-service
+
+volumes:
+  postgres-data:
+  user-db-data:
+  redis-data:
