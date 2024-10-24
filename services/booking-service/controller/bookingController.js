@@ -301,10 +301,50 @@ const getBookingById = async (req, res) => {
   }
 };
 
+// Function to update booking status
+const updateBookingStatus = async (req, res) => {
+  const span = tracer.startSpan("updateBookingStatus", {
+    attributes: { "function.name": "updateBookingStatus" },
+  });
+
+  const { bookingId } = req.params; // Get the bookingId from request parameters
+  const { status } = req.body; // Get the status from the request body
+
+  try {
+    // Start a child span for database operation
+    const dbSpan = tracer.startSpan("updateBookingInDatabase", {
+      parent: span,
+      attributes: { "db.operation": "update", "db.collection": "bookings" },
+    });
+
+    // Update the booking status in PostgreSQL
+    const [updated] = await Booking.update({ status }, { where: { id: bookingId } });
+
+    dbSpan.end(); // End the child span for DB operation
+
+    if (updated === 0) {
+      span.setAttribute("updateBookingStatus.status", "not_found");
+      span.end();
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    span.setAttribute("updateBookingStatus.status", "success");
+    res.json({ message: "Booking status updated successfully" });
+  } catch (error) {
+    span.setAttribute("updateBookingStatus.status", "error");
+    span.setAttribute("error.message", error.message);
+    console.error('Error updating booking status:', error);
+    res.status(500).json({ message: 'An error occurred while updating the booking status' });
+  } finally {
+    span.end(); // End the span
+  }
+};
+
 
 module.exports = {
   createBooking,
   getAvailableSeats,
   getAllBookings,
-  getBookingById 
+  getBookingById,
+  updateBookingStatus
 };
