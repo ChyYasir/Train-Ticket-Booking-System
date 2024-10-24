@@ -1,25 +1,31 @@
-import { useState } from "react";
-import Header from "./components/Header";
-import Footer from "./components/Footer";
-import TrainList from "./components/TrainList";
-import TicketBookingForm from "./components/TicketBookingForm";
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import Header from './components/Header';
+import Footer from './components/Footer';
+import Register from './components/Register'; // Ensure this points to your existing Register component
+import Login from './components/Login'; // Ensure this points to your existing Login component
+import Home from './components/Home';
 
 const App = () => {
-  const [trains] = useState([
-    { id: 1, name: "Train A", route: "City A to City B" },
-    { id: 2, name: "Train B", route: "City C to City D" },
-  ]);
-  const [selectedTrain, setSelectedTrain] = useState(null);
-
   return (
-    <div className="flex flex-col min-h-screen">
+    <Router>
       <Header />
-      <main className="flex-grow">
-        <TrainList trains={trains} onSelectTrain={setSelectedTrain} />
-        {selectedTrain && <TicketBookingForm selectedTrain={selectedTrain} />}
+      <main className="container mx-auto p-4">
+        <Routes>
+          <Route path="/" element={
+            <div className="flex justify-center items-center h-screen bg-gray-100">
+            <h1 className="text-4xl font-bold text-slate-800 shadow-md p-4 bg-white rounded-lg">
+              Welcome to Ticket Booking System
+            </h1>
+          </div>
+          
+          } />
+          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/home" element={<Home />} />
+        </Routes>
       </main>
       <Footer />
-    </div>
+    </Router>
   );
 };
 
