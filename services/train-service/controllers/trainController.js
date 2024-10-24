@@ -1,22 +1,26 @@
 const Train = require("../models/train");
 const redisClient = require("../config/redis");
 const { Op } = require("sequelize");
+const createBreaker = require("../config/circuitBreaker");
+
+// Create circuit breakers for database operations
+const findAllBreaker = createBreaker(Train.findAll.bind(Train));
+const findByPkBreaker = createBreaker(Train.findByPk.bind(Train));
+const createTrainBreaker = createBreaker(Train.create.bind(Train));
+const updateBreaker = createBreaker(Train.update.bind(Train));
+const destroyBreaker = createBreaker(Train.destroy.bind(Train));
 
 exports.getTrainSchedule = async (req, res) => {
   const { source, destination } = req.query;
-
-  // console.log({ source, destination });
   const cacheKey = `schedule:${source}:${destination}`;
 
-  // console.log(cacheKey);
-  // Check Redis cache first
-  const cachedSchedule = await redisClient.get(cacheKey);
   try {
+    const cachedSchedule = await redisClient.get(cacheKey);
     if (cachedSchedule) {
       return res.json(JSON.parse(cachedSchedule));
     }
 
-    const schedule = await Train.findAll({
+    const schedule = await findAllBreaker.fire({
       where: {
         source,
         destination,
@@ -29,9 +33,7 @@ exports.getTrainSchedule = async (req, res) => {
         .json({ message: "No trains available for the selected route" });
     }
 
-    // Cache the result in Redis
-    await redisClient.set(cacheKey, JSON.stringify(schedule), "EX", 3600); // Cache for 1 hour
-
+    await redisClient.set(cacheKey, JSON.stringify(schedule), "EX", 3600);
     res.json(schedule);
   } catch (error) {
     console.log(error);
@@ -44,7 +46,7 @@ exports.getTrainSchedule = async (req, res) => {
 exports.getTrainDetails = async (req, res) => {
   try {
     const { trainId } = req.params;
-    const train = await Train.findByPk(trainId);
+    const train = await findByPkBreaker.fire(trainId);
     if (!train) {
       return res.status(404).json({ message: "Train not found" });
     }
@@ -58,7 +60,7 @@ exports.getTrainDetails = async (req, res) => {
 
 exports.createTrain = async (req, res) => {
   try {
-    const newTrain = await Train.create(req.body);
+    const newTrain = await createTrainBreaker.fire(req.body);
     res
       .status(201)
       .json({ trainId: newTrain.id, message: "Train created successfully" });
@@ -72,7 +74,7 @@ exports.createTrain = async (req, res) => {
 exports.updateTrain = async (req, res) => {
   try {
     const { trainId } = req.params;
-    const [updated] = await Train.update(req.body, {
+    const [updated] = await updateBreaker.fire(req.body, {
       where: { id: trainId },
     });
     if (updated === 0) {
@@ -89,7 +91,7 @@ exports.updateTrain = async (req, res) => {
 exports.deleteTrain = async (req, res) => {
   try {
     const { trainId } = req.params;
-    const deleted = await Train.destroy({
+    const deleted = await destroyBreaker.fire({
       where: { id: trainId },
     });
     if (deleted === 0) {
