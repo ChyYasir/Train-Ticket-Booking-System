@@ -1,9 +1,9 @@
 const express = require("express");
 const app = express();
 const port = 3333;
-// const trainRoutes = require("./routes/trainRoutes");
+const trainRoutes = require("./routes/trainRoutes");
 const sequelize = require("./config/database");
-// const { connectToRedis } = require("./config/redis");
+// const connectToRedis = require("./config/redis");
 
 app.use(express.json());
 
@@ -27,7 +27,7 @@ app.get("/health", (req, res) => {
 });
 
 // Use train routes
-// app.use("/trains", trainRoutes);
+app.use("/trains", trainRoutes);
 
 app.listen(port, () => {
   console.log(`Train service is running on port ${port}`);

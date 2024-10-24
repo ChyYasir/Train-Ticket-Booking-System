@@ -1,6 +1,12 @@
-const Redis = require("ioredis");
-require("dotenv").config();
+const Redis = require("redis");
+const redisClient = Redis.createClient({
+  url: "redis://localhost:6379",
+});
 
-const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+redisClient.on("error", (err) => console.error("Redis Client Error", err));
 
-module.exports = redis;
+(async () => {
+  await redisClient.connect();
+})();
+
+module.exports = redisClient;

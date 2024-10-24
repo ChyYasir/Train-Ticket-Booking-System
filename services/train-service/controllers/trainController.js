@@ -1,14 +1,17 @@
 const Train = require("../models/train");
-const { redisClient } = require("../config/redis");
+const redisClient = require("../config/redis");
 const { Op } = require("sequelize");
 
 exports.getTrainSchedule = async (req, res) => {
-  try {
-    const { source, destination } = req.query;
-    const cacheKey = `schedule:${source}:${destination}`;
+  const { source, destination } = req.query;
 
-    // Check Redis cache first
-    const cachedSchedule = await redisClient.get(cacheKey);
+  // console.log({ source, destination });
+  const cacheKey = `schedule:${source}:${destination}`;
+
+  // console.log(cacheKey);
+  // Check Redis cache first
+  const cachedSchedule = await redisClient.get(cacheKey);
+  try {
     if (cachedSchedule) {
       return res.json(JSON.parse(cachedSchedule));
     }
@@ -31,6 +34,7 @@ exports.getTrainSchedule = async (req, res) => {
 
     res.json(schedule);
   } catch (error) {
+    console.log(error);
     res
       .status(500)
       .json({ message: "Error fetching train schedule", error: error.message });
