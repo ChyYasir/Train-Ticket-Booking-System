@@ -1,6 +1,6 @@
 const Booking = require("../model/bookingModel");
 const redisClient = require('../config/redisClient');
-
+const { Sequelize } = require("sequelize"); 
 const { trace } = require("@opentelemetry/api");
 const tracer = trace.getTracer("booking-service"); // Initialize the tracer
 
@@ -20,13 +20,32 @@ const createBooking = async (req, res) => {
   }
 
   try {
+    // Step 1: Check if the requested seats are already booked
+    const bookedSeats = await Booking.findAll({
+      where: {
+        trainId,
+        journeyDate,
+        coach,
+        seats: {
+          [Sequelize.Op.overlap]: seats, // Check if any of the requested seats overlap with already booked seats
+        },
+      },
+    });
+
+    if (bookedSeats.length > 0) {
+      // If any of the requested seats are already booked, return an error
+      span.setAttribute("createBooking.status", "seats_already_booked");
+      span.end();
+      return res.status(409).json({ message: "One or more of the requested seats are already booked." });
+    }
+
     // Start a child span for database operation
     const dbSpan = tracer.startSpan("saveBookingToDatabase", {
       parent: span,
       attributes: { "db.operation": "insert", "db.collection": "bookings" },
     });
 
-    // Create a new booking
+    // Step 2: Create a new booking in PostgreSQL if seats are available
     const booking = await Booking.create({
       userId,
       trainId,
@@ -36,7 +55,22 @@ const createBooking = async (req, res) => {
       passengerDetails,
     });
 
-    dbSpan.end(); // End the child span
+    dbSpan.end(); // End the child span for DB operation
+
+    // Step 3: Calculate TTL for Redis based on journeyDate
+    const currentTime = new Date();
+    const journeyTime = new Date(journeyDate);
+    const ttl = Math.floor((journeyTime - currentTime) / 1000);  // TTL in seconds
+
+    if (ttl > 0) {
+      // Store the booking in Redis with expiration based on journeyDate
+      await redisClient.set(
+        `booking:${trainId}:${journeyDate}`, 
+        JSON.stringify(booking), 
+        'EX', 
+        ttl  // Set TTL (time-to-live)
+      );
+    }
 
     span.setAttribute("createBooking.status", "success");
     res.status(201).json({
@@ -63,55 +97,57 @@ const getAvailableSeats = async (req, res) => {
 
   try {
     // Start a child span for Redis operation
-    const redisSpan = tracer.startSpan("fetchSeatMapFromRedis", {
+    const redisSpan = tracer.startSpan("fetchBookingsFromRedis", {
       parent: span,
       attributes: { "db.operation": "get", "db.system": "redis", "trainId": trainId },
     });
 
-    // 1. Fetch the seat map from Redis
-    const seatMap = await redisClient.get(`seatmap:${trainId}`);
+    // 1. Fetch the booking data from Redis
+    const bookingFromRedis = await redisClient.get(`booking:${trainId}:${journeyDate}`);
 
-    if (!seatMap) {
+    if (bookingFromRedis) {
       redisSpan.end();
-      span.setAttribute("getAvailableSeats.status", "error");
-      span.end();
-      return res.status(404).json({ message: 'Seat map not found for this train' });
+      console.log("Booking found in Redis.");
+      const bookings = [JSON.parse(bookingFromRedis)];
+      
+      // Check seat availability with Redis data
+      return calculateAvailableSeats(bookings, trainId, journeyDate, res);
     }
 
     redisSpan.end(); // End the Redis span
+    console.log("Booking not found in Redis. Falling back to PostgreSQL.");
 
-    const seatMapParsed = JSON.parse(seatMap); // Parse the seat map from Redis
-
-    // Start a child span for database operation
+    // Start a child span for PostgreSQL operation
     const dbSpan = tracer.startSpan("fetchBookingsFromDatabase", {
       parent: span,
       attributes: { "db.operation": "find", "db.collection": "bookings" },
     });
 
-    // 2. Query existing bookings from the database
-    const bookings = await Booking.findAll({
+    // 2. Fetch bookings from PostgreSQL as a fallback
+    const bookingsFromDB = await Booking.findAll({
       where: {
         trainId,
         journeyDate,
       },
     });
 
-    dbSpan.end(); // End the database span
+    dbSpan.end(); // End the PostgreSQL span
 
-    // 3. Extract booked seats from the bookings
-    const bookedSeats = bookings.reduce((acc, booking) => {
-      return acc.concat(booking.seats);
-    }, []);
+    // If there are bookings, store them back in Redis for future use
+    if (bookingsFromDB.length > 0) {
+      const ttl = Math.floor((new Date(journeyDate) - new Date()) / 1000);
+      if (ttl > 0) {
+        await redisClient.set(
+          `booking:${trainId}:${journeyDate}`,
+          JSON.stringify(bookingsFromDB),
+          'EX',
+          ttl  // Set TTL (time-to-live)
+        );
+      }
+    }
 
-    // 4. Calculate seat availability and add "available" field
-    seatMapParsed.coaches.forEach(coach => {
-      coach.seats.forEach(seat => {
-        seat.available = !bookedSeats.includes(seat.seatId); // If the seat is not booked, it's available
-      });
-    });
-
-    span.setAttribute("getAvailableSeats.status", "success");
-    res.json(seatMapParsed);
+    // Check seat availability with PostgreSQL data
+    return calculateAvailableSeats(bookingsFromDB, trainId, journeyDate, res);
 
   } catch (error) {
     span.setAttribute("getAvailableSeats.status", "error");
@@ -122,6 +158,41 @@ const getAvailableSeats = async (req, res) => {
     span.end(); // End the span
   }
 };
+
+// Helper function to calculate seat availability and return response
+const calculateAvailableSeats = async (bookings, trainId, journeyDate, res) => {
+  try {
+    // 1. Fetch seat map from Redis for that train
+    const seatMap = await redisClient.get(`seatmap:${trainId}`);
+    
+    if (!seatMap) {
+      return res.status(404).json({ message: 'Seat map not found for this train' });
+    }
+
+    const seatMapParsed = JSON.parse(seatMap);
+    
+    // 2. Extract booked seats from the bookings
+    const bookedSeats = bookings.reduce((acc, booking) => {
+      return acc.concat(booking.seats);
+    }, []);
+
+    // 3. Calculate seat availability
+    seatMapParsed.coaches.forEach(coach => {
+      coach.seats.forEach(seat => {
+        seat.available = !bookedSeats.includes(seat.seatId); // Mark as available if not booked
+      });
+    });
+
+    // 4. Return the seat map with updated availability
+    return res.json(seatMapParsed);
+    
+  } catch (error) {
+    console.error('Error calculating available seats:', error);
+    return res.status(500).json({ message: 'An error occurred while calculating available seats' });
+  }
+};
+
+
 
 // Function to get all bookings with tracing
 const getAllBookings = async (req, res) => {

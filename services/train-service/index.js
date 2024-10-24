@@ -3,13 +3,17 @@ const app = express();
 const port = 3333;
 const trainRoutes = require("./routes/trainRoutes");
 const sequelize = require("./config/database");
+const { connectRabbitMQ } = require("./config/rabbitMQ");
 // const connectToRedis = require("./config/redis");
 
 app.use(express.json());
-
+require("./config/tracing");
 // Connect to PostgreSQL and Redis
 // connectToDatabase();
 // connectToRedis();
+
+// Connect to RabbitMQ
+connectRabbitMQ();
 
 // Database connection
 sequelize
