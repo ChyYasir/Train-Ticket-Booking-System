@@ -2,7 +2,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 const paymentRoutes = require("./route/paymentRoute");
 const redisClient = require("./config/redisClient");
-
+const port = 8080;
 dotenv.config(); // Load environment variables
 
 const app = express();
@@ -16,7 +16,6 @@ app.get("/health", (req, res) => {
 app.use("/payment", paymentRoutes);
 
 // Start the server
-const PORT = process.env.PORT || 3335;
-app.listen(PORT, () => {
-  console.log(`Payment service is running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Payment service is running on port ${port}`);
 });

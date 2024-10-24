@@ -1,5 +1,7 @@
 const axios = require("axios");
 const redisClient = require("../config/redisClient");
+const dotenv = require("dotenv");
+dotenv.config(); 
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || "http://localhost:3331";
 
 // Function to verify OTP
