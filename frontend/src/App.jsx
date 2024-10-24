@@ -1,35 +1,26 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from "react";
+import Header from "./components/Header";
+import Footer from "./components/Footer";
+import TrainList from "./components/TrainList";
+import TicketBookingForm from "./components/TicketBookingForm";
 
-function App() {
-  const [count, setCount] = useState(0)
+const App = () => {
+  const [trains] = useState([
+    { id: 1, name: "Train A", route: "City A to City B" },
+    { id: 2, name: "Train B", route: "City C to City D" },
+  ]);
+  const [selectedTrain, setSelectedTrain] = useState(null);
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+    <div className="flex flex-col min-h-screen">
+      <Header />
+      <main className="flex-grow">
+        <TrainList trains={trains} onSelectTrain={setSelectedTrain} />
+        {selectedTrain && <TicketBookingForm selectedTrain={selectedTrain} />}
+      </main>
+      <Footer />
+    </div>
+  );
+};
 
-export default App
+export default App;
