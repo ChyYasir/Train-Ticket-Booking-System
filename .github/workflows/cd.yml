@@ -1,0 +1,95 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      REGISTRY: docker.io
+      REPO: shel404
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push user-service image
+        run: |
+          docker build -t $REGISTRY/$REPO/user-service:2.0 ./services/user-service
+          docker push $REGISTRY/$REPO/user-service:2.0
+
+      - name: Build and push booking-service image
+        run: |
+          docker build -t $REGISTRY/$REPO/booking-service:2.0 ./services/booking-service
+          docker push $REGISTRY/$REPO/booking-service:2.0
+
+      - name: Build and push notification-service image
+        run: |
+          docker build -t $REGISTRY/$REPO/notification-service:2.0 ./services/notification-service
+          docker push $REGISTRY/$REPO/notification-service:2.0
+
+      - name: Build and push train-service image
+        run: |
+          docker build -t $REGISTRY/$REPO/train-service:2.0 ./services/train-service
+          docker push $REGISTRY/$REPO/train-service:2.0
+
+      - name: Build and push payment-service image
+        run: |
+          docker build -t $REGISTRY/$REPO/payment-service:2.0 ./services/payment-service
+          docker push $REGISTRY/$REPO/payment-service:2.0
+
+      - name: Build and push frontend image
+        run: |
+          docker build -t $REGISTRY/$REPO/frontend:2.0 ./frontend
+          docker push $REGISTRY/$REPO/frontend:2.0
+
+      - name: Set up kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Deploy user-service
+        run: |
+          kubectl set image deployment/user-service user-service=$REGISTRY/$REPO/user-service:2.0 -n ${{ secrets.KUBERNETES_NAMESPACE }}
+
+      - name: Deploy booking-service
+        run: |
+          kubectl set image deployment/booking-service booking-service=$REGISTRY/$REPO/booking-service:2.0 -n ${{ secrets.KUBERNETES_NAMESPACE }}
+
+      - name: Deploy notification-service
+        run: |
+          kubectl set image deployment/notification-service notification-service=$REGISTRY/$REPO/notification-service:2.0 -n ${{ secrets.KUBERNETES_NAMESPACE }}
+
+      - name: Deploy train-service
+        run: |
+          kubectl set image deployment/train-service train-service=$REGISTRY/$REPO/train-service:2.0 -n ${{ secrets.KUBERNETES_NAMESPACE }}
+
+      - name: Deploy payment-service
+        run: |
+          kubectl set image deployment/payment-service payment-service=$REGISTRY/$REPO/payment-service:2.0 -n ${{ secrets.KUBERNETES_NAMESPACE }}
+
+      - name: Deploy frontend
+        run: |
+          kubectl set image deployment/frontend frontend=$REGISTRY/$REPO/frontend:2.0 -n ${{ secrets.KUBERNETES_NAMESPACE }}
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/user-service -n ${{ secrets.KUBERNETES_NAMESPACE }}
+          kubectl rollout status deployment/booking-service -n ${{ secrets.KUBERNETES_NAMESPACE }}
+          kubectl rollout status deployment/notification-service -n ${{ secrets.KUBERNETES_NAMESPACE }}
+          kubectl rollout status deployment/train-service -n ${{ secrets.KUBERNETES_NAMESPACE }}
+          kubectl rollout status deployment/payment-service -n ${{ secrets.KUBERNETES_NAMESPACE }}
+          kubectl rollout status deployment/frontend -n ${{ secrets.KUBERNETES_NAMESPACE }}
