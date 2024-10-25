@@ -31,8 +31,8 @@ jobs:
         working-directory: ./services/booking-service
         run: |
 
-          pip install -r requirements.txt
-          pytest
+          npm install
+          npm test
 
       - name: Test notification-service
         working-directory: ./services/notification-service
@@ -45,15 +45,15 @@ jobs:
         working-directory: ./services/train-service
         run: |
 
-          pip install -r requirements.txt
-          pytest
+          npm install
+          npm test
 
       - name: Test payment-service
         working-directory: ./services/payment-service
         run: |
 
-          mvn clean install
-          mvn test
+          npm install
+          npm test
 
       - name: Test frontend
         working-directory: ./frontend
