@@ -1,21 +1,10 @@
-# train-service.yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: train-service
-spec:
-  ports:
-    - port: 3333
-  selector:
-    app: train-service
-
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: train-service
+  namespace: ticket-system
 spec:
-  replicas: 3
+  replicas: 2
   selector:
     matchLabels:
       app: train-service
@@ -28,17 +17,38 @@ spec:
     spec:
       containers:
         - name: train-service
-          image: shel404/train-service:latest
+          image: shel404/train-service:2.0
           ports:
             - containerPort: 3333
           env:
             - name: DATABASE_URL
-              value: postgres://postgres:postgres@postgres:5432/ticketsystem
+              value: "postgres://live:live@10.0.2.28:5432/train"
             - name: RABBITMQ_URL
-              value: amqp://rabbitmq:5672
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 3332
-            initialDelaySeconds: 60
-            periodSeconds: 10
+              value: "amqp://rabbitmq:5672"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: train-service
+  namespace: ticket-system
+spec:
+  selector:
+    app: train-service
+  ports:
+    - protocol: TCP
+      port: 3333
+      targetPort: 3333
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: train-service
+  namespace: ticket-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: train-service
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 50

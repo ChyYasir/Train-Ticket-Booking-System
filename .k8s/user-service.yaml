@@ -1,20 +1,10 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: user-service
-spec:
-  ports:
-    - port: 3330
-  selector:
-    app: user-service
-
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: user-service
+  namespace: ticket-system
 spec:
-  replicas: 3
+  replicas: 2
   selector:
     matchLabels:
       app: user-service
@@ -27,17 +17,38 @@ spec:
     spec:
       containers:
         - name: user-service
-          image: shel404/user-service:latest
+          image: shel404/user-service:2.0
           ports:
             - containerPort: 3330
           env:
             - name: DATABASE_URL
-              value: mongodb://mongo:27017/user-db
+              value: "mongodb+srv://mongo:mongo123@cluster0.1dltw.mongodb.net/userDB"
             - name: RABBITMQ_URL
-              value: amqp://rabbitmq:5672
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 3330
-            initialDelaySeconds: 60
-            periodSeconds: 10
+              value: "amqp://rabbitmq:5672"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: ticket-system
+spec:
+  selector:
+    app: user-service
+  ports:
+    - protocol: TCP
+      port: 3330
+      targetPort: 3330
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: user-service
+  namespace: ticket-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: user-service
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 50

@@ -1,20 +1,10 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: booking-service
-spec:
-  ports:
-    - port: 3331
-  selector:
-    app: booking-service
-
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: booking-service
+  namespace: ticket-system
 spec:
-  replicas: 3
+  replicas: 2
   selector:
     matchLabels:
       app: booking-service
@@ -27,17 +17,29 @@ spec:
     spec:
       containers:
         - name: booking-service
-          image: shel404/booking-service:latest
+          image: shel404/booking-service:2.0
           ports:
             - containerPort: 3331
           env:
             - name: DATABASE_URL
-              value: postgres://postgres:postgres@postgres:5432/ticketsystem
+              value: "postgres://postgres:postgres@10.0.2.193:5432/booking"
             - name: RABBITMQ_URL
-              value: amqp://rabbitmq:5672
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 3331
-            initialDelaySeconds: 60
-            periodSeconds: 10
+              value: "amqp://rabbitmq:5672"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: booking-service
+  namespace: ticket-system
+spec:
+  selector:
+    app: booking-service
+  ports:
+    - protocol: TCP
+      port: 3331
+      targetPort: 3331
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: booking-service

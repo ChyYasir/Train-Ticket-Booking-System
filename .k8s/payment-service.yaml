@@ -1,54 +1,52 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: notification-service
+  name: payment-service
   namespace: ticket-system
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: notification-service
+      app: payment-service
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        app: notification-service
+        app: payment-service
     spec:
       containers:
-        - name: notification-service
-          image: shel404/notification-service:2.0
+        - name: payment-service
+          image: shel404/payment-service:2.0
           ports:
-            - containerPort: 3332
+            - containerPort: 8080
           env:
-            - name: DATABASE_URL
-              value: "postgres://postgres:postgres@10.0.2.193:5432/booking"
             - name: RABBITMQ_URL
               value: "amqp://rabbitmq:5672"
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: notification-service
+  name: payment-service
   namespace: ticket-system
 spec:
   selector:
-    app: notification-service
+    app: payment-service
   ports:
     - protocol: TCP
-      port: 3332
-      targetPort: 3332
+      port: 8080
+      targetPort: 8080
 ---
 apiVersion: autoscaling/v1
 kind: HorizontalPodAutoscaler
 metadata:
-  name: notification-service
+  name: payment-service
   namespace: ticket-system
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: notification-service
+    name: payment-service
   minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 50
