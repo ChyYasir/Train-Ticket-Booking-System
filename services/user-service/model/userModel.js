@@ -1,10 +1,15 @@
 const mongoose = require("mongoose");
-
+const { v4: uuidv4 } = require("uuid");
 // Define the User schema
 const userSchema = new mongoose.Schema({
   id: {
     type: String, // MongoDB automatically generates unique ObjectId for each document.
     default: () => new mongoose.Types.ObjectId(), // UUID equivalent in MongoDB.
+  },
+  userId: {
+    type: String,
+    default: uuidv4, // Automatically generate a UUID v4 for userId
+    unique: true, // Ensure the userId is unique
   },
   username: {
     type: String,

@@ -2,10 +2,12 @@ const express = require("express");
 const app = express();
 const port = 3331;
 const sequelize = require("./config/database");
+const { connectRabbitMQ } = require("./config/rabbitMQ");
 const bookingRoute = require("./route/bookingRoute");
 app.use(express.json());
 require("./config/tracing");
-
+// Connect to RabbitMQ and consume messages
+connectRabbitMQ();
 try {
   sequelize.authenticate();
   console.log("Sequlize initiated successfully.");

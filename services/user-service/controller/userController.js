@@ -3,6 +3,90 @@ const User = require("../model/userModel"); // Mongoose User model
 const jwtHelper = require("../utils/jwtHelper");
 const { trace } = require("@opentelemetry/api"); 
 const tracer = trace.getTracer("user-service");
+const getUserInfo = async (req, res) => {
+  // Start a span for the getUserInfo function
+  const span = tracer.startSpan("getUserInfo-function", {
+    attributes: { "function.name": "getUserInfo" },
+  });
+
+  const { userId } = req.params; // Get the userId from the route parameters
+
+  try {
+    // Start a child span for database operations
+    const dbSpan = tracer.startSpan("mongo-find-user", {
+      parent: span,
+      attributes: { "db.operation": "find", "db.collection": "users" },
+    });
+
+    // Find the user by ID
+    const user = await User.findOne({ userId });
+
+    dbSpan.end(); // End the child span after finding the user
+
+    if (!user) {
+      span.setAttribute("getUserInfo.status", "not_found");
+      span.end();
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    span.setAttribute("getUserInfo.status", "success"); // Add a success attribute
+
+    // Return the user information
+    res.json({
+      userId: user.userId,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+    });
+  } catch (err) {
+    span.setAttribute("getUserInfo.status", "error");
+    span.setAttribute("error.message", err.message);
+    console.log("🚀 ~ getUserInfo ~ err:", err);
+    res.status(500).json({ message: "An error occurred while fetching user information" });
+  } finally {
+    span.end(); // End the span
+  }
+};
+
+
+const deleteUser = async (req, res) => {
+  // Start a span for the deleteUser function
+  const span = tracer.startSpan("deleteUser-function", {
+    attributes: { "function.name": "deleteUser" },
+  });
+
+  const { userId } = req.params; // Get the userId from the route parameters
+
+  try {
+    // Start a child span for database operations
+    const dbSpan = tracer.startSpan("mongo-delete-user", {
+      parent: span, // Nest this span under the parent
+      attributes: { "db.operation": "delete", "db.collection": "users" },
+    });
+
+    // Find the user by ID and delete
+    const user = await User.findByIdAndDelete(userId);
+
+    dbSpan.end(); // End the child span after deleting the user
+
+    if (!user) {
+      span.setAttribute("deleteUser.status", "not_found");
+      span.end();
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    span.setAttribute("deleteUser.status", "success"); // Add a success attribute
+    res.json({ message: "User deleted successfully" });
+  } catch (err) {
+    span.setAttribute("deleteUser.status", "error");
+    span.setAttribute("error.message", err.message);
+    console.log("🚀 ~ deleteUser ~ err:", err);
+    res.status(500).json({ message: "An error occurred while deleting the user" });
+  } finally {
+    span.end(); // End the span
+  }
+};
+
 
 const register = async (req, res) => {
   // Start a span for the register function
@@ -33,7 +117,7 @@ const register = async (req, res) => {
 
     span.setAttribute("register.status", "success"); // Add tag to span
 
-    res.json({ message: "Registration successful", userId: user._id });
+    res.json({ message: "Registration successful", userId: user.userId });
   } catch (err) {
     span.setAttribute("register.status", "error"); // Mark error in span
     span.setAttribute("error.message", err.message);
@@ -139,4 +223,4 @@ const verifyToken = async (req, res) => {
   }
 };
 
-module.exports = { register, login, refreshToken, verifyToken };
+module.exports = { getUserInfo, deleteUser, register, login, refreshToken, verifyToken };

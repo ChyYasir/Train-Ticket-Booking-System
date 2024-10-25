@@ -56,6 +56,7 @@ services:
     environment:
       DATABASE_URL: mongodb://order-db:27017/user-db
       RABBITMQ_URL: amqp://rabbitmq:5672
+      LIGHTSTEP_ACCESS_TOKEN: sIazFmobGyk3mlSBQ7W7zB386SxNcnufrG1a-ECdU8Nr3NVM3TomMS8Na2PMR7f3eulxWnSmGpU2S3z3jygr61dLMYxWxUaAp8QpLMLF
     ports:
       - "3330:3330"
     depends_on:
@@ -68,6 +69,8 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/ticketsystem
       RABBITMQ_URL: amqp://rabbitmq:5672
+      REDIS_URL: redis://redis:6379
+      LIGHTSTEP_ACCESS_TOKEN: fG8pet1gF-UCI3WESV6UUJOpyemGglCzEwzwK608WZX2n3iuD9Ye-DTi2dM4ZS3LeSUNen5z_FOQNM2PIdwTXhjllkZig6ggYV9Pflxr
     ports:
       - "3331:3331"
     depends_on:
@@ -80,6 +83,9 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/ticketsystem
       RABBITMQ_URL: amqp://rabbitmq:5672
+      REDIS_URL: redis://redis:6379
+      MAILJET_API_KEY: 3b642204f85fa944501880c36229742c
+      MAILJET_API_SECRET: d52a1d26434321a8228dcd63f1d2dba9
     ports:
       - "3332:3332"
     depends_on:
@@ -92,6 +98,8 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/ticketsystem
       RABBITMQ_URL: amqp://rabbitmq:5672
+      REDIS_URL: redis://redis:6379
+      LIGHTSTEP_ACCESS_TOKEN: B_b36hN46McP_DecjYyTlqdAs66a3xfvsEnNJ6QIAxyf0cos_bsVW1hRma_1KZirWQnln-mc5OJFan-0K4PXOEK1xv39Qtpy_Mp1LAF1
     ports:
       - "3333:3333"
     depends_on:
@@ -102,7 +110,11 @@ services:
   payment-service:
     build: ./services/payment-service
     environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ticketsystem
       RABBITMQ_URL: amqp://rabbitmq:5672
+      REDIS_URL: redis://redis:6379
+      LIGHTSTEP_ACCESS_TOKEN: fG8pet1gF-UCI3WESV6UUJOpyemGglCzEwzwK608WZX2n3iuD9Ye-DTi2dM4ZS3LeSUNen5z_FOQNM2PIdwTXhjllkZig6ggYV9Pflxr
+      BOOKING_SERVICE_URL: http://booking-service:3331
     ports:
       - "8080:8080"
     depends_on:
