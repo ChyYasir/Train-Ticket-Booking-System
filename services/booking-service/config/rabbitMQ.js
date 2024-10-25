@@ -3,6 +3,11 @@ const redisClient = require('./redisClient'); // Redis client
 const dotenv = require("dotenv"); 
 dotenv.config(); 
 
+const MAX_RETRIES = 5;  // Maximum number of retry attempts
+const RETRY_DELAY = 1000; // Initial retry delay in milliseconds
+
+let retries = 0;
+
 const connectRabbitMQ = async () => {
   try {
     const connection = await amqp.connect(process.env.RABBITMQ_URL);
@@ -23,8 +28,21 @@ const connectRabbitMQ = async () => {
       }
     });
 
+    // Reset retries counter on successful connection
+    retries = 0;
+
   } catch (err) {
-    console.error("Error connecting to RabbitMQ", err);
+    retries++;
+    if (retries > MAX_RETRIES) {
+      console.error("Max retries reached. Could not connect to RabbitMQ.");
+      process.exit(1); // Exit process after max retries
+    } else {
+      const delay = Math.min(RETRY_DELAY * retries, 30000); // Exponential backoff (max 30s)
+      console.error(`Error connecting to RabbitMQ. Retrying in ${delay / 1000} seconds...`, err);
+      
+      // Retry the connection after delay
+      setTimeout(connectRabbitMQ, delay);
+    }
   }
 };
 
