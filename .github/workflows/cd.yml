@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  build-test-deploy:
     runs-on: ubuntu-latest
 
     env:
@@ -19,6 +19,48 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+
+      - name: Test user-service
+        working-directory: ./services/user-service
+        run: |
+
+          npm install
+          npm test
+
+      - name: Test booking-service
+        working-directory: ./services/booking-service
+        run: |
+
+          pip install -r requirements.txt
+          pytest
+
+      - name: Test notification-service
+        working-directory: ./services/notification-service
+        run: |
+
+          npm install
+          npm test
+
+      - name: Test train-service
+        working-directory: ./services/train-service
+        run: |
+
+          pip install -r requirements.txt
+          pytest
+
+      - name: Test payment-service
+        working-directory: ./services/payment-service
+        run: |
+
+          mvn clean install
+          mvn test
+
+      - name: Test frontend
+        working-directory: ./frontend
+        run: |
+
+          npm install
+          npm test
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -58,38 +100,4 @@ jobs:
 
       - name: Set up kubectl
         run: |
-          echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
-
-      - name: Deploy user-service
-        run: |
-          kubectl set image deployment/user-service user-service=$REGISTRY/$REPO/user-service:2.0 -n ${{ secrets.KUBERNETES_NAMESPACE }}
-
-      - name: Deploy booking-service
-        run: |
-          kubectl set image deployment/booking-service booking-service=$REGISTRY/$REPO/booking-service:2.0 -n ${{ secrets.KUBERNETES_NAMESPACE }}
-
-      - name: Deploy notification-service
-        run: |
-          kubectl set image deployment/notification-service notification-service=$REGISTRY/$REPO/notification-service:2.0 -n ${{ secrets.KUBERNETES_NAMESPACE }}
-
-      - name: Deploy train-service
-        run: |
-          kubectl set image deployment/train-service train-service=$REGISTRY/$REPO/train-service:2.0 -n ${{ secrets.KUBERNETES_NAMESPACE }}
-
-      - name: Deploy payment-service
-        run: |
-          kubectl set image deployment/payment-service payment-service=$REGISTRY/$REPO/payment-service:2.0 -n ${{ secrets.KUBERNETES_NAMESPACE }}
-
-      - name: Deploy frontend
-        run: |
-          kubectl set image deployment/frontend frontend=$REGISTRY/$REPO/frontend:2.0 -n ${{ secrets.KUBERNETES_NAMESPACE }}
-
-      - name: Verify deployment
-        run: |
-          kubectl rollout status deployment/user-service -n ${{ secrets.KUBERNETES_NAMESPACE }}
-          kubectl rollout status deployment/booking-service -n ${{ secrets.KUBERNETES_NAMESPACE }}
-          kubectl rollout status deployment/notification-service -n ${{ secrets.KUBERNETES_NAMESPACE }}
-          kubectl rollout status deployment/train-service -n ${{ secrets.KUBERNETES_NAMESPACE }}
-          kubectl rollout status deployment/payment-service -n ${{ secrets.KUBERNETES_NAMESPACE }}
-          kubectl rollout status deployment/frontend -n ${{ secrets.KUBERNETES_NAMESPACE }}
+          echo "${{ secrets.KUBECONFIG }}" > $HOME
