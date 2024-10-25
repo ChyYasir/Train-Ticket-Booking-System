@@ -7,6 +7,6 @@ const router = express.Router();
 router.post("/verify-otp", verifyOtpAndUpdateBooking);
 
 // Route to update booking status
-router.put("/update-booking-status", updateBookingStatus);
+router.post("/update-booking-status", updateBookingStatus);
 
 module.exports = router;

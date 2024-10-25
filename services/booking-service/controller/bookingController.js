@@ -32,6 +32,49 @@ const produceBookingMessage = (userId, bookingId) => {
     });
   });
 };
+const lockSeatsInRedis = async (trainId, journeyDate, coach, seats) => {
+  const lockKey = `lock:seats:${trainId}:${coach}:${journeyDate}`;
+  
+  try {
+    // Fetch current locked seats from Redis
+    let lockedSeats = await redisClient.get(lockKey);
+    lockedSeats = lockedSeats ? JSON.parse(lockedSeats) : [];
+
+    // Mark selected seats as locked
+    seats.forEach((seat) => {
+      if (!lockedSeats.includes(seat)) {
+        lockedSeats.push(seat);
+      }
+    });
+
+    // Update Redis with the locked seats
+    const currentTime = new Date();
+    const journeyTime = new Date(journeyDate);
+    const ttl = Math.floor((journeyTime - currentTime) / 1000);  // TTL in seconds until the journey date
+    await redisClient.set(lockKey, JSON.stringify(lockedSeats), 'EX', ttl, 'NX');
+    console.log(`Seats locked in Redis: ${seats}`);
+  } catch (error) {
+    console.error('Error locking seats in Redis:', error);
+  }
+};
+
+const checkSeatsAvailabilityInRedis = async (trainId, journeyDate, coach, seats) => {
+  const lockKey = `lock:seats:${trainId}:${coach}:${journeyDate}`;
+  try {
+    let lockedSeats = await redisClient.get(lockKey);
+    lockedSeats = lockedSeats ? JSON.parse(lockedSeats) : [];
+
+    // Check if any requested seat is already locked
+    const unavailableSeats = seats.filter((seat) => lockedSeats.includes(seat));
+    if (unavailableSeats.length > 0) {
+      return false; // Seats are locked
+    }
+    return true; // Seats are available
+  } catch (error) {
+    console.error('Error checking seat availability in Redis:', error);
+    return false;
+  }
+};
 // Function to create a new booking with tracing
 const createBooking = async (req, res) => {
   const span = tracer.startSpan("createBooking", {
@@ -48,6 +91,12 @@ const createBooking = async (req, res) => {
   }
 
   try {
+    const seatsAvailable = await checkSeatsAvailabilityInRedis(trainId, journeyDate, coach, seats);
+    if (!seatsAvailable) {
+      span.setAttribute("createBooking.status", "seats_already_locked");
+      span.end();
+      return res.status(409).json({ message: "One or more requested seats are already locked." });
+    }
     // Step 1: Check if the requested seats are already booked
     const bookedSeats = await Booking.findAll({
       where: {
@@ -57,6 +106,7 @@ const createBooking = async (req, res) => {
         seats: {
           [Sequelize.Op.overlap]: seats, // Check if any of the requested seats overlap with already booked seats
         },
+        status : "Confirmed"
       },
     });
 
@@ -72,6 +122,9 @@ const createBooking = async (req, res) => {
       parent: span,
       attributes: { "db.operation": "insert", "db.collection": "bookings" },
     });
+
+    // Step 3: Lock the seats in Redis
+    await lockSeatsInRedis(trainId, journeyDate, coach, seats);
 
     // Step 2: Create a new booking in PostgreSQL if seats are available
     // Create a new booking with status "Pending"
@@ -225,8 +278,6 @@ const calculateAvailableSeats = async (bookings, trainId, journeyDate, res) => {
   }
 };
 
-
-
 // Function to get all bookings with tracing
 const getAllBookings = async (req, res) => {
   const span = tracer.startSpan("getAllBookings", {
@@ -301,6 +352,48 @@ const getBookingById = async (req, res) => {
   }
 };
 
+// Function to release seats in Redis
+const releaseSeatsInRedis = async (trainId, journeyDate, coach, seats) => {
+  const lockKey = `lock:seats:${trainId}:${coach}:${journeyDate}`;
+  try {
+    let lockedSeats = await redisClient.get(lockKey);
+
+    // If the key doesn't exist, log and return early
+    if (!lockedSeats) {
+      console.log('No locked seats found in Redis for this booking.');
+      return;
+    }
+
+    // Check if lockedSeats is a valid JSON string
+    if (lockedSeats.startsWith('{') || lockedSeats.startsWith('[')) {
+      try {
+        lockedSeats = JSON.parse(lockedSeats); // Parse the locked seats list
+      } catch (parseError) {
+        console.error('Error parsing locked seats from Redis:', parseError);
+        return;
+      }
+    } else {
+      // If the value is not valid JSON, log it and return
+      console.error('Invalid data format in Redis, expected JSON but got:', lockedSeats);
+      return;
+    }
+
+    // Remove the booked seats from locked seats in Redis
+    lockedSeats = lockedSeats.filter((seat) => !seats.includes(seat));
+
+    // Update Redis with the unlocked seats or delete the key if no seats remain locked
+    if (lockedSeats.length > 0) {
+      await redisClient.set(lockKey, JSON.stringify(lockedSeats));
+      console.log(`Seats remaining locked in Redis: ${lockedSeats}`);
+    } else {
+      await redisClient.del(lockKey); // If no seats are locked, remove the key
+      console.log('All seats released from lock in Redis.');
+    }
+  } catch (error) {
+    console.error('Error releasing seats in Redis:', error);
+  }
+};
+
 // Function to update booking status
 const updateBookingStatus = async (req, res) => {
   const span = tracer.startSpan("updateBookingStatus", {
@@ -326,6 +419,13 @@ const updateBookingStatus = async (req, res) => {
       span.setAttribute("updateBookingStatus.status", "not_found");
       span.end();
       return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    // If the booking is canceled, release the seats
+    if (status === "Cancelled") {
+      const booking = await Booking.findByPk(bookingId);
+      const { trainId, journeyDate, coach, seats } = booking;
+      await releaseSeatsInRedis(trainId, journeyDate, coach, seats);
     }
 
     span.setAttribute("updateBookingStatus.status", "success");

@@ -40,13 +40,16 @@ exports.verifyOtpAndUpdateBooking = async (req, res) => {
   }
 };
 
+
+
 // Function to update booking status
 exports.updateBookingStatus = async (req, res) => {
+  
   const { bookingId, status } = req.body;
 
   try {
     // Make a request to the booking service to update the booking status
-    const status = "Confirmed";
+    // const status = "Confirmed";
     const response = await axios.put(`${BOOKING_SERVICE_URL}/${bookingId}`, { status });
 
     if (response.status === 200) {
